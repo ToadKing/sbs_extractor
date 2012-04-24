@@ -108,7 +108,6 @@ typedef struct {
 }
 
 typedef struct {
-	u32 b1;
 	u16 u1;
 	u16 freq;
 	u32 u2;
@@ -116,7 +115,6 @@ typedef struct {
 } sbr_entry3;
 
 #define DOSWAP_SBR_ENTRY3(x) {\
-	DOSWAP32((x).b1);\
 	DOSWAP16((x).u1);\
 	DOSWAP16((x).freq);\
 	DOSWAP32((x).u2);\

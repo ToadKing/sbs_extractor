@@ -156,6 +156,7 @@ int main(int argc, char *argv[])
 	c = i - 1;
 	entries3 = calloc(head.count, sizeof(*entries3));
 	fprintf(out, "\nENTRY2/ENTRY3:\n");
+	fseek(f, 4, SEEK_CUR);
 
 	for(i = 0; i < c; i++)
 	{
@@ -172,13 +173,12 @@ int main(int argc, char *argv[])
 		fprintf(out, "e2.u3:     0x%04hX\n", entries2[i].u3);
 		fprintf(out, "e2.u4:     0x%08X\n", entries2[i].u4);
 
-		fprintf(out, "e3.b1:     0x%08X\n", entries3[i].b1);
 		fprintf(out, "e3.u1:     0x%04hX\n", entries3[i].u1);
 		fprintf(out, "e3.freq:   %hu\n", entries3[i].freq);
 		fprintf(out, "e3.u2:     0x%08X\n", entries3[i].u2);
 		fprintf(out, "e3.offset: 0x%08X\n", entries3[i].offset);
 
-		fseek(f, 16, SEEK_CUR);
+		fseek(f, 20, SEEK_CUR);
 	}
 
 	goto end;
