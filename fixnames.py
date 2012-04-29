@@ -14,7 +14,7 @@ def parseNode(n):
 		else:
 			usednames[name] = 1
 
-		filename = "0x%08X.snu" % int(e.getAttribute("value").replace("0x", ""), 16)
+		filename = "0x%08X.snu" % int(e.getAttribute("value"), 16)
 		newname = "%s%s.snu" % (name.replace("RWAUDIOSB_COMMENTARY_P4_BOUNCE_DL_DATA_BOUNCEDATAAUDIO_DEV_SPEECH_SAMPLES_ENGLISH_TIM_KITZROW_MST_16B_48K_", "").replace("RWAUDIOSB_COMMENTARY_P4_BOUNCE_DL_DATA_BOUNCEDATAAUDIO_DEV_SPEECH_SAMPLES_ENGLISH_SILENCE_", ""), append)
 		print "%s -> %s" %(filename, newname)
 		os.rename(filename, newname)
