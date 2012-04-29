@@ -40,6 +40,12 @@ int make_file(sbr_entry *entry, sbr_stream_metadata *meta, u32 stream_offset)
 	int last = 0;
 	int r = 0;
 
+	if (meta->codec != 4)
+	{
+		printf("error: tool can currently only handle XAS audio (this is 0x%02X)\n", meta->codec);
+		r = 5;
+		goto error;
+	}
 	sprintf(fname, "%s/0x%08X.snu", name, entry->id);
 	printf("saving %s\n", fname);
 
@@ -48,6 +54,7 @@ int make_file(sbr_entry *entry, sbr_stream_metadata *meta, u32 stream_offset)
 	if (sout == NULL)
 	{
 		printf("failed to open file %s for writing\n", fname);
+		r = 6;
 		goto error;
 	}
 
@@ -55,11 +62,12 @@ int make_file(sbr_entry *entry, sbr_stream_metadata *meta, u32 stream_offset)
 	shead.u2 = 0;
 	shead.magic = 0x20000000U;
 	shead.u3 = 0;
-	shead.u4 = meta->u1;
+	shead.codec = meta->codec;
+	shead.channels = meta->channels;
 	shead.freq = meta->freq;
-	shead.u5 = meta->u2;
+	shead.u4 = meta->u1;
+	shead.u5 = 0;
 	shead.u6 = 0;
-	shead.u7 = 0;
 
 	DOSWAP_SNU_HEADER(shead);
 
@@ -68,18 +76,13 @@ int make_file(sbr_entry *entry, sbr_stream_metadata *meta, u32 stream_offset)
 	if (fseek(sbs, stream_offset, SEEK_SET))
 	{
 		printf("unexpected end of file (0x%08X)\n", stream_offset);
-		r = 4;
+		r = 7;
 		goto error;
 	}
 
 	for(;;)
 	{
 		u16 h[2];
-
-		if (last)
-		{
-			break;
-		}
 
 		if(fread(h, sizeof(h), 1, sbs) != 1)
 		{
@@ -100,15 +103,20 @@ int make_file(sbr_entry *entry, sbr_stream_metadata *meta, u32 stream_offset)
 			if (fread(buffer, h[1], 1, sbs) != 1)
 			{
 				printf("unexpected end of file (0x%08X)\n", (u32) ftell(sbs));
-				r = 6;
+				r = 8;
 				goto error;
 			}
 			fwrite(buffer, h[1], 1, sout);
 			break;
 		default:
 			printf("unknown stream info (0x%02X)\n", h[0]);
-			r = 7;
+			r = 9;
 			goto error;
+		}
+
+		if (last)
+		{
+			break;
 		}
 	}
 
@@ -153,9 +161,10 @@ int process_entry(sbr_entry *entry)
 			fseek(f, meta.offset, SEEK_SET);
 			fread(&stream_data, sizeof(stream_data), 1, f);
 			DOSWAP_SBR_STREAM_METADATA(stream_data);
-			fprintf(out, "  u1:     0x%04X\n", stream_data.u1);
-			fprintf(out, "  freq:   0x%04X\n", stream_data.freq);
-			fprintf(out, "  u2:     0x%08X\n", stream_data.u2);
+			fprintf(out, "  codec:    0x%02X\n", stream_data.codec);
+			fprintf(out, "  channels: 0x%02X\n", stream_data.channels);
+			fprintf(out, "  freq:     0x%04X\n", stream_data.freq);
+			fprintf(out, "  u1:       0x%08X\n", stream_data.u1);
 			fseek(f, c, SEEK_SET);
 			got_stream_info = 1;
 		}
@@ -165,7 +174,7 @@ int process_entry(sbr_entry *entry)
 			fseek(f, meta.offset, SEEK_SET);
 			fread(&stream_offset, sizeof(stream_offset), 1, f);
 			DOSWAP32(stream_offset);
-			fprintf(out, "  offset: 0x%08X\n", stream_offset);
+			fprintf(out, "  offset:   0x%08X\n", stream_offset);
 			fseek(f, c, SEEK_SET);
 			got_stream_offset = 1;
 		}

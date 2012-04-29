@@ -105,27 +105,28 @@ typedef struct {
 }
 
 typedef struct {
-	u16 u1;
+	u8 codec;
+	u8 channels;
 	u16 freq;
-	u32 u2;
+	u32 u1;
 } sbr_stream_metadata;
 
 #define DOSWAP_SBR_STREAM_METADATA(x) {\
-	DOSWAP16((x).u1);\
 	DOSWAP16((x).freq);\
-	DOSWAP32((x).u2);\
+	DOSWAP32((x).u1);\
 }
 
 typedef struct {
 	u32 u1;
 	u32 u2;
-	u32 magic; // must be 0x20000000
+	u32 magic; // must be 0x20000000, at least for ToWav to work
 	u32 u3;
-	u16 u4; // set to sbr_stream_metadata.u1?
+	u8 codec;
+	u8 channels;
 	u16 freq;
-	u32 u5; // set to sbr_stream_metadata.u2?
+	u32 u4; // set to sbr_stream_metadata.u1, maybe number of samples?
+	u32 u5;
 	u32 u6;
-	u32 u7;
 } snu_header;
 
 #define DOSWAP_SNU_HEADER(x) {\
@@ -133,11 +134,10 @@ typedef struct {
 	DOSWAP32((x).u2);\
 	DOSWAP32((x).magic);\
 	DOSWAP32((x).u3);\
-	DOSWAP16((x).u4);\
 	DOSWAP16((x).freq);\
+	DOSWAP32((x).u4);\
 	DOSWAP32((x).u5);\
 	DOSWAP32((x).u6);\
-	DOSWAP32((x).u7);\
 }
 
 #pragma pack(pop)
