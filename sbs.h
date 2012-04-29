@@ -13,6 +13,7 @@
 #include <Windows.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <direct.h>
 
 typedef unsigned char u8;
 typedef unsigned short u16;
@@ -20,12 +21,12 @@ typedef unsigned int u32;
 typedef unsigned long long u64;
 
 #define BSWAP16(x) ((u16)((((u16)(x))>>8)|(((u16)(x))<<8)))
-#define BSWAP32(x) ((u32)((BSWAP16(((u32)(x))&0x0000FFFF)<<16)|(BSWAP16(((u32)(x))>>16))))
+#define BSWAP32(x) ((u32)((BSWAP16(((u32)(x))&0x0000FFFFU)<<16)|(BSWAP16(((u32)(x))>>16))))
 #define BSWAP64(x) ((u64)((BSWAP32(((u64)(x))&0x00000000FFFFFFFFULL)<<32)|(BSWAP32(((u64)(x))>>32))))
 
-#define DOSWAP16(x) (x) = BSWAP16(x)
-#define DOSWAP32(x) (x) = BSWAP32(x)
-#define DOSWAP64(x) (x) = BSWAP64(x)
+#define DOSWAP16(x) (x) = BSWAP16(*(u16*)&(x))
+#define DOSWAP32(x) (x) = BSWAP32(*(u32*)&(x))
+#define DOSWAP64(x) (x) = BSWAP64(*(u64*)&(x))
 
 #define U32_TO_CHARS(x) (char) ((x) >> 24), (char) ((x) >> 16), (char) ((x) >> 8), (char) (x)
 
@@ -49,7 +50,7 @@ typedef struct {
 	u16 u4;
 } sbr_header;
 
-#define SBR_MAGIC 0x53424B52
+#define SBR_MAGIC 0x53424B52U
 
 #define DOSWAP_SBR_HEADER(x) {\
 	DOSWAP32((x).magic);\
@@ -83,42 +84,60 @@ typedef struct {
 
 typedef struct {
 	u32 id;
-	u16 u1;
-	u32 u2;
-} sbr_entry1;
+	u16 count;
+	u32 offset;
+} sbr_entry;
 
-#define DOSWAP_SBR_ENTRY1(x) {\
+#define DOSWAP_SBR_ENTRY(x) {\
 	DOSWAP32((x).id);\
-	DOSWAP16((x).u1);\
-	DOSWAP32((x).u2);\
+	DOSWAP16((x).count);\
+	DOSWAP32((x).offset);\
 }
 
 typedef struct {
-	u16 u1;
-	u32 u2;
-	u16 u3;
-	u32 u4;
-} sbr_entry2;
+	u16 id; // 0 for stream metadata, 1 for stream offset (in sbs file)
+	u32 offset;
+} sbr_entry_metadata;
 
-#define DOSWAP_SBR_ENTRY2(x) {\
-	DOSWAP16((x).u1);\
-	DOSWAP32((x).u2);\
-	DOSWAP16((x).u3);\
-	DOSWAP32((x).u4);\
+#define DOSWAP_SBR_ENTRY_METADATA(x) {\
+	DOSWAP16((x).id);\
+	DOSWAP32((x).offset);\
 }
 
 typedef struct {
 	u16 u1;
 	u16 freq;
 	u32 u2;
-	u32 offset;
-} sbr_entry3;
+} sbr_stream_metadata;
 
-#define DOSWAP_SBR_ENTRY3(x) {\
+#define DOSWAP_SBR_STREAM_METADATA(x) {\
 	DOSWAP16((x).u1);\
 	DOSWAP16((x).freq);\
 	DOSWAP32((x).u2);\
-	DOSWAP32((x).offset);\
+}
+
+typedef struct {
+	u32 u1;
+	u32 u2;
+	u32 magic; // must be 0x20000000
+	u32 u3;
+	u16 u4; // set to sbr_stream_metadata.u1?
+	u16 freq;
+	u32 u5; // set to sbr_stream_metadata.u2?
+	u32 u6;
+	u32 u7;
+} snu_header;
+
+#define DOSWAP_SNU_HEADER(x) {\
+	DOSWAP32((x).u1);\
+	DOSWAP32((x).u2);\
+	DOSWAP32((x).magic);\
+	DOSWAP32((x).u3);\
+	DOSWAP16((x).u4);\
+	DOSWAP16((x).freq);\
+	DOSWAP32((x).u5);\
+	DOSWAP32((x).u6);\
+	DOSWAP32((x).u7);\
 }
 
 #pragma pack(pop)
