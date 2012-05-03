@@ -31,12 +31,13 @@ FILE *out;
 FILE *sbs;
 char name[1024];
 
-int make_file(sbr_entry *entry, sbr_stream_metadata *meta, u32 stream_offset)
+int make_file(sbr_entry *entry, sbr_stream_metadata *meta, sbr_stream_offset *stream_offset)
 {
 	char fname[1024];
 	FILE *sout = NULL;
-	snu_header shead;
+	snu_header shead = {0};
 	u8 buffer[0x10000];
+	u32 numsamples = 0;
 	int last = 0;
 	int r = 0;
 
@@ -65,7 +66,7 @@ int make_file(sbr_entry *entry, sbr_stream_metadata *meta, u32 stream_offset)
 	shead.codec = meta->codec;
 	shead.channels = meta->channels;
 	shead.freq = meta->freq;
-	shead.u4 = meta->u1;
+	shead.samples = meta->samples;
 	shead.u5 = 0;
 	shead.u6 = 0;
 
@@ -73,51 +74,65 @@ int make_file(sbr_entry *entry, sbr_stream_metadata *meta, u32 stream_offset)
 
 	fwrite(&shead, sizeof(shead), 1, sout);
 
-	if (fseek(sbs, stream_offset, SEEK_SET))
+	if (fseek(sbs, stream_offset->offset, SEEK_SET))
 	{
-		printf("unexpected end of file (0x%08X)\n", stream_offset);
+		printf("unexpected end of file (0x%08X)\n", stream_offset->offset);
 		r = 7;
 		goto error;
 	}
 
 	for(;;)
 	{
-		u16 h[2];
+		struct {
+			u16 h1;
+			u16 h2;
+			u32 samples;
+		} h = {0};
 
-		if(fread(h, sizeof(h), 1, sbs) != 1)
+		if(fread(&h, sizeof(h), 1, sbs) != 1)
 		{
 			printf("unexpected end of file (0x%08X)\n", (u32) ftell(sbs));
 			r = 5;
 			goto error;
 		}
 
-		DOSWAP16(h[0]);
-		DOSWAP16(h[1]);
+		DOSWAP16(h.h1);
+		DOSWAP16(h.h2);
+		DOSWAP32(h.samples);
 
-		switch(h[0])
+		switch(h.h1)
 		{
 		case 0x8000:
 			last = 1;
 		case 0x0000:
-			fseek(sbs, -4, SEEK_CUR);
-			if (fread(buffer, h[1], 1, sbs) != 1)
+			fseek(sbs, -8, SEEK_CUR);
+			if (fread(buffer, h.h2, 1, sbs) != 1)
 			{
 				printf("unexpected end of file (0x%08X)\n", (u32) ftell(sbs));
 				r = 8;
 				goto error;
 			}
-			fwrite(buffer, h[1], 1, sout);
+			fwrite(buffer, h.h2, 1, sout);
 			break;
 		default:
-			printf("unknown stream info (0x%02X)\n", h[0]);
+			printf("unknown stream info (0x%04X)\n", h.h1);
 			r = 9;
 			goto error;
 		}
+		
+		numsamples += h.samples;
 
 		if (last)
 		{
 			break;
 		}
+	}
+	
+	if (numsamples != (meta->samples & ~0x40000000U))
+	{
+		printf("sample count mismatch (got %u, expected %u)", numsamples, (meta->samples & ~0x40000000U));
+		r = 10;
+		goto error;
 	}
 
 	error:
@@ -135,8 +150,8 @@ int process_entry(sbr_entry *entry)
 	u16 i;
 	int curr;
 	int got_stream_info = 0, got_stream_offset = 0;
-	sbr_stream_metadata stream_data;
-	u32 stream_offset;
+	sbr_stream_metadata stream_data = {0};
+	sbr_stream_offset stream_offset = {0};
 	int r;
 
 	curr = ftell(f);
@@ -152,7 +167,7 @@ int process_entry(sbr_entry *entry)
 		}
 
 		DOSWAP_SBR_ENTRY_METADATA(meta);
-		fprintf(out, " id:     0x%04hX\n", meta.id);
+		fprintf(out, " id:     0x%04X\n", meta.id);
 		fprintf(out, " offset: 0x%08X\n", meta.offset);
 
 		if (meta.id == 0)
@@ -164,7 +179,7 @@ int process_entry(sbr_entry *entry)
 			fprintf(out, "  codec:    0x%02X\n", stream_data.codec);
 			fprintf(out, "  channels: 0x%02X\n", stream_data.channels);
 			fprintf(out, "  freq:     0x%04X\n", stream_data.freq);
-			fprintf(out, "  u1:       0x%08X\n", stream_data.u1);
+			fprintf(out, "  samples:  0x%08X (%u, ~%.5fs)\n", stream_data.samples, (stream_data.samples & ~0x40000000U), (stream_data.freq) ? (float) (stream_data.samples & ~0x40000000U) / stream_data.freq : 0.0f);
 			fseek(f, c, SEEK_SET);
 			got_stream_info = 1;
 		}
@@ -173,14 +188,15 @@ int process_entry(sbr_entry *entry)
 			int c = ftell(f);
 			fseek(f, meta.offset, SEEK_SET);
 			fread(&stream_offset, sizeof(stream_offset), 1, f);
-			DOSWAP32(stream_offset);
-			fprintf(out, "  offset:   0x%08X\n", stream_offset);
+			DOSWAP_SBR_STREAM_OFFSET(stream_offset);
+			fprintf(out, "  offset:   0x%08X\n", stream_offset.offset);
+			fprintf(out, "  u1:       0x%08X\n", stream_offset.u1);
 			fseek(f, c, SEEK_SET);
 			got_stream_offset = 1;
 		}
 		else
 		{
-			printf("unknown metadata entry\n");
+			printf("unknown metadata entry (%u)\n", meta.id);
 			return 2;
 		}
 	}
@@ -191,7 +207,7 @@ int process_entry(sbr_entry *entry)
 		return 3;
 	}
 
-	r = make_file(entry, &stream_data, stream_offset);
+	r = make_file(entry, &stream_data, &stream_offset);
 
 	if (r)
 	{
@@ -208,8 +224,8 @@ int main(int argc, char *argv[])
 	out = NULL;
 	sbs = NULL;
 	u32 i;
-	sbr_header head;
-	sbr_metadata meta;
+	sbr_header head = {0};
+	sbr_metadata meta = {0};
 	sbr_entry *entries = NULL;
 	char sbrname[1024];
 	char sbsname[1024];
@@ -273,21 +289,21 @@ int main(int argc, char *argv[])
 	}
 
 	fprintf(out, "HEADER:\n");
-	fprintf(out, "magic:   \"%c%c%c%c\"\n", U32_TO_CHARS(head.magic));
-	fprintf(out, "u1:      0x%08X\n", head.u1);
-	fprintf(out, "b1:      0x%08X\n", head.b1);
-	fprintf(out, "b2:      0x%08X\n", head.b2);
-	fprintf(out, "b3:      0x%08X\n", head.b3);
-	fprintf(out, "bankKey: 0x%08X\n", head.bankKey);
-	fprintf(out, "b4:      0x%08X\n", head.b4);
-	fprintf(out, "count:   0x%08X\n", head.count);
-	fprintf(out, "u2:      0x%08X\n", head.u2);
-	fprintf(out, "u3:      0x%08X\n", head.u3);
-	fprintf(out, "offset:  0x%08X\n", head.offset);
-	fprintf(out, "b5:      0x%08X\n", head.b5);
-	fprintf(out, "u4:      0x%04hX\n", head.u4);
+	fprintf(out, "magic:       \"%c%c%c%c\"\n", U32_TO_CHARS(head.magic));
+	fprintf(out, "u1:          0x%08X\n", head.u1);
+	fprintf(out, "b1:          0x%08X\n", head.b1);
+	fprintf(out, "b2:          0x%08X\n", head.b2);
+	fprintf(out, "b3:          0x%08X\n", head.b3);
+	fprintf(out, "bankKey:     0x%08X\n", head.bankKey);
+	fprintf(out, "b4:          0x%08X\n", head.b4);
+	fprintf(out, "count:       0x%08X\n", head.count);
+	fprintf(out, "u2:          0x%08X\n", head.u2);
+	fprintf(out, "entryOffset: 0x%08X\n", head.entryOffset);
+	fprintf(out, "metaOffset:  0x%08X\n", head.metaOffset);
+	fprintf(out, "b5:          0x%08X\n", head.b5);
+	fprintf(out, "u3:          0x%04X\n", head.u3);
 
-	fseek(f, head.offset, SEEK_SET);
+	fseek(f, head.metaOffset, SEEK_SET);
 	entries = calloc(head.count, sizeof(*entries));
 
 	fread(&meta, sizeof(meta), 1, f);
@@ -296,13 +312,15 @@ int main(int argc, char *argv[])
 
 	fprintf(out, "\nMETADATA:\n");
 	fprintf(out, "snr1: \"%c%c%c%c\"\n", U32_TO_CHARS(meta.snr1));
-	fprintf(out, "u1:   0x%04hX\n", meta.u1);
+	fprintf(out, "u1:   0x%04X\n", meta.u1);
 	fprintf(out, "sns1: \"%c%c%c%c\"\n", U32_TO_CHARS(meta.sns1));
-	fprintf(out, "u2:   0x%04hX\n", meta.u2);
+	fprintf(out, "u2:   0x%04X\n", meta.u2);
 
 	DOSWAP_SBR_METADATA(meta);
 
 	fprintf(out, "\nENTRY:\n");
+	
+	fseek(f, head.entryOffset, SEEK_SET);
 
 	for(i = 0; i < head.count; i++)
 	{
@@ -316,13 +334,13 @@ int main(int argc, char *argv[])
 		DOSWAP_SBR_ENTRY(entries[i]);
 
 		fprintf(out, "\nid:     0x%08X\n", entries[i].id);
-		fprintf(out, "count:  0x%04hX\n", entries[i].count);
+		fprintf(out, "count:  0x%04X\n", entries[i].count);
 		fprintf(out, "offset: 0x%08X\n", entries[i].offset);
 
 		r2 = process_entry(&entries[i]);
 		if (r2)
 		{
-			printf("failed: %u", r2);
+			printf("failed: %d\n", r2);
 			goto error;
 		}
 	}
@@ -348,6 +366,15 @@ int main(int argc, char *argv[])
 	if (sbs != NULL)
 	{
 		fclose(sbs);
+	}
+
+	if (r)
+	{
+		printf("please issue a bug report at https://github.com/ToadKing/sbs_extractor/issues\n");
+		#ifdef _WIN32
+		fflush(stdout);
+		system("pause");
+		#endif
 	}
 
 	return r;
