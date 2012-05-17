@@ -40,14 +40,14 @@ def parseNode(n):
 		else:
 			usednames[name] = 1
 
-		filename = "0x{:08X}.snu".format(int(e.getAttribute("value"), 16))
-		newname = "{}{}.snu".format(name.replace("RWAUDIOSB_COMMENTARY_P4_BOUNCE_DL_DATA_BOUNCEDATAAUDIO_DEV_SPEECH_SAMPLES_ENGLISH_TIM_KITZROW_MST_16B_48K_", "").replace("RWAUDIOSB_COMMENTARY_P4_BOUNCE_DL_DATA_BOUNCEDATAAUDIO_DEV_SPEECH_SAMPLES_ENGLISH_SILENCE_", ""), append)
+		filename = "0x{:08X}.wav".format(int(e.getAttribute("value"), 16))
+		newname = "{}{}.wav".format(name.replace("RWAUDIOSB_COMMENTARY_P4_BOUNCE_DL_DATA_BOUNCEDATAAUDIO_DEV_SPEECH_SAMPLES_ENGLISH_TIM_KITZROW_MST_16B_48K_", "").replace("RWAUDIOSB_COMMENTARY_P4_BOUNCE_DL_DATA_BOUNCEDATAAUDIO_DEV_SPEECH_SAMPLES_ENGLISH_SILENCE_", ""), append)
 		try:
 			os.rename(filename, newname)
 			print "{} -> {}".format(filename, newname)
-			count += 1
+			renamed += 1
 		except:
-			print "could not rename {} to {}".format(filename, newname)
+			print "could not rename {} to {}: {}".format(filename, newname, sys.exc_info()[1])
 	print
 	print "{} of {} files renamed".format(renamed, total)
 
