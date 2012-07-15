@@ -41,12 +41,7 @@ int make_file(sbr_entry *entry, sbr_stream_metadata *meta, sbr_stream_offset *st
 	int last = 0;
 	int r = 0;
 
-	if (!meta)
-	{
-		return 0;
-	}
-
-	if (meta->codec != 4)
+	if (meta && meta->codec != 4)
 	{
 		printf("error: tool can currently only handle XAS audio (this is 0x%02X)\n", meta->codec);
 		r = 5;
@@ -64,14 +59,37 @@ int make_file(sbr_entry *entry, sbr_stream_metadata *meta, sbr_stream_offset *st
 		goto error;
 	}
 
+	if (fseek(sbs, stream_offset->offset, SEEK_SET))
+	{
+		printf("unexpected end of file (0x%08X)\n", stream_offset->offset);
+		r = 7;
+		goto error;
+	}
+
 	shead.u1 = 0;
 	shead.u2 = 0;
 	shead.magic = 0x20000000U;
-	shead.u3 = 0;
-	shead.codec = meta->codec;
-	shead.channels = meta->channels;
-	shead.freq = meta->freq;
-	shead.samples = meta->samples;
+	if (meta)
+	{
+		shead.u3 = 0;
+		shead.codec = meta->codec;
+		shead.channels = meta->channels;
+		shead.freq = meta->freq;
+		shead.samples = meta->samples;
+	}
+	else
+	{
+		if(fread(&shead.u3, 12, 1, sbs) != 1)
+		{
+			printf("unexpected end of file (0x%08X)\n", (u32) ftell(sbs));
+			r = 12;
+			goto error;
+		}
+
+		DOSWAP32(shead.u3);
+		DOSWAP16(shead.freq);
+		DOSWAP32(shead.samples);
+	}
 	shead.u5 = 0;
 	shead.u6 = 0;
 
@@ -79,12 +97,7 @@ int make_file(sbr_entry *entry, sbr_stream_metadata *meta, sbr_stream_offset *st
 
 	fwrite(&shead, sizeof(shead), 1, sout);
 
-	if (fseek(sbs, stream_offset->offset, SEEK_SET))
-	{
-		printf("unexpected end of file (0x%08X)\n", stream_offset->offset);
-		r = 7;
-		goto error;
-	}
+	DOSWAP_SNU_HEADER(shead);
 
 	for(;;)
 	{
@@ -94,24 +107,26 @@ int make_file(sbr_entry *entry, sbr_stream_metadata *meta, sbr_stream_offset *st
 			u32 samples;
 		} h = {0};
 
-		if(fread(&h, sizeof(h), 1, sbs) != 1)
-		{
-			printf("unexpected end of file (0x%08X)\n", (u32) ftell(sbs));
-			r = 5;
-			goto error;
-		}
+		fread(&h, sizeof(h), 1, sbs);
 
 		DOSWAP16(h.h1);
 		DOSWAP16(h.h2);
 		DOSWAP32(h.samples);
 
+		if (h.h2 < 8)
+		{
+			h.samples = 0;
+		}
+
 		switch(h.h1)
 		{
 		case 0x8000:
+		case 0x4500:
 			last = 1;
 		case 0x0000:
+		case 0x4400:
 			fseek(sbs, -8, SEEK_CUR);
-			if (fread(buffer, h.h2, 1, sbs) != 1)
+			if (h.h2 == 0 || fread(buffer, h.h2, 1, sbs) != 1)
 			{
 				printf("unexpected end of file (0x%08X)\n", (u32) ftell(sbs));
 				r = 8;
@@ -124,7 +139,7 @@ int make_file(sbr_entry *entry, sbr_stream_metadata *meta, sbr_stream_offset *st
 			r = 9;
 			goto error;
 		}
-		
+
 		numsamples += h.samples;
 
 		if (last)
@@ -132,10 +147,10 @@ int make_file(sbr_entry *entry, sbr_stream_metadata *meta, sbr_stream_offset *st
 			break;
 		}
 	}
-	
-	if (numsamples != (meta->samples & ~0x40000000U))
+
+	if (numsamples != (shead.samples & ~0x40000000U))
 	{
-		printf("sample count mismatch (got %u, expected %u)", numsamples, (meta->samples & ~0x40000000U));
+		printf("sample count mismatch (got %u, expected %u)", numsamples, (shead.samples & ~0x40000000U));
 		r = 10;
 		goto error;
 	}
@@ -346,7 +361,7 @@ int main(int argc, char *argv[])
 	}
 
 	fprintf(out, "ENTRY:\n");
-	
+
 	fseek(f, head.entryOffset, SEEK_SET);
 
 	for(i = 0; i < head.count; i++)
