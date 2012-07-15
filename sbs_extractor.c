@@ -41,6 +41,11 @@ int make_file(sbr_entry *entry, sbr_stream_metadata *meta, sbr_stream_offset *st
 	int last = 0;
 	int r = 0;
 
+	if (!meta)
+	{
+		return 0;
+	}
+
 	if (meta->codec != 4)
 	{
 		printf("error: tool can currently only handle XAS audio (this is 0x%02X)\n", meta->codec);
@@ -145,11 +150,11 @@ int make_file(sbr_entry *entry, sbr_stream_metadata *meta, sbr_stream_offset *st
 	return r;
 }
 
-int process_entry(sbr_entry *entry)
+int process_entry(sbr_entry *entry, int metas[], int meta_count)
 {
 	u16 i;
 	int curr;
-	int got_stream_info = 0, got_stream_offset = 0;
+	int got_stream_offset = 0, got_stream_meta = 0;
 	sbr_stream_metadata stream_data = {0};
 	sbr_stream_offset stream_offset = {0};
 	int r;
@@ -170,7 +175,13 @@ int process_entry(sbr_entry *entry)
 		fprintf(out, " id:     0x%04X\n", meta.id);
 		fprintf(out, " offset: 0x%08X\n", meta.offset);
 
-		if (meta.id == 0)
+		if (meta.id >= meta_count)
+		{
+			printf("metadata entry too high (%d)\n", meta.id);
+			return 11;
+		}
+
+		if (metas[meta.id] == 1)
 		{
 			int c = ftell(f);
 			fseek(f, meta.offset, SEEK_SET);
@@ -181,16 +192,15 @@ int process_entry(sbr_entry *entry)
 			fprintf(out, "  freq:     0x%04X\n", stream_data.freq);
 			fprintf(out, "  samples:  0x%08X (%u, ~%.5fs)\n", stream_data.samples, (stream_data.samples & ~0x40000000U), (stream_data.freq) ? (float) (stream_data.samples & ~0x40000000U) / stream_data.freq : 0.0f);
 			fseek(f, c, SEEK_SET);
-			got_stream_info = 1;
+			got_stream_meta = 1;
 		}
-		else if (meta.id == 1)
+		else if (metas[meta.id] == 2)
 		{
 			int c = ftell(f);
 			fseek(f, meta.offset, SEEK_SET);
 			fread(&stream_offset, sizeof(stream_offset), 1, f);
 			DOSWAP_SBR_STREAM_OFFSET(stream_offset);
 			fprintf(out, "  offset:   0x%08X\n", stream_offset.offset);
-			fprintf(out, "  u1:       0x%08X\n", stream_offset.u1);
 			fseek(f, c, SEEK_SET);
 			got_stream_offset = 1;
 		}
@@ -201,13 +211,13 @@ int process_entry(sbr_entry *entry)
 		}
 	}
 
-	if (!(got_stream_info && got_stream_offset))
+	if (!got_stream_offset)
 	{
 		printf("did not get stream info needed\n");
 		return 3;
 	}
 
-	r = make_file(entry, &stream_data, &stream_offset);
+	r = make_file(entry, got_stream_meta ? &stream_data : NULL, &stream_offset);
 
 	if (r)
 	{
@@ -226,6 +236,8 @@ int main(int argc, char *argv[])
 	u32 i;
 	sbr_header head = {0};
 	sbr_metadata meta = {0};
+	int meta_order[256] = {0};
+	int meta_count = 0;
 	sbr_entry *entries = NULL;
 	char sbrname[1024];
 	char sbsname[1024];
@@ -306,19 +318,34 @@ int main(int argc, char *argv[])
 	fseek(f, head.metaOffset, SEEK_SET);
 	entries = calloc(head.count, sizeof(*entries));
 
-	fread(&meta, sizeof(meta), 1, f);
-
-	DOSWAP_SBR_METADATA(meta);
-
 	fprintf(out, "\nMETADATA:\n");
-	fprintf(out, "snr1: \"%c%c%c%c\"\n", U32_TO_CHARS(meta.snr1));
-	fprintf(out, "u1:   0x%04X\n", meta.u1);
-	fprintf(out, "sns1: \"%c%c%c%c\"\n", U32_TO_CHARS(meta.sns1));
-	fprintf(out, "u2:   0x%04X\n", meta.u2);
 
-	DOSWAP_SBR_METADATA(meta);
+	for (;;)
+	{
+		fread(&meta, sizeof(meta), 1, f);
 
-	fprintf(out, "\nENTRY:\n");
+		DOSWAP_SBR_METADATA(meta);
+
+		fprintf(out, "id:   \"%c%c%c%c\"\n", U32_TO_CHARS(meta.id));
+		fprintf(out, "u1:   0x%04X\n\n", meta.u1);
+
+		if (meta.id == 0x534E5231) // SNR1
+		{
+			meta_order[meta_count++] = 1;
+		}
+		else if (meta.id == 0x534E5331) // SNS1
+		{
+			meta_order[meta_count++] = 2;
+			break;
+		}
+		else
+		{
+			printf("unknown meta info \"%c%c%c%c\"\n", U32_TO_CHARS(meta.id));
+			goto error;
+		}
+	}
+
+	fprintf(out, "ENTRY:\n");
 	
 	fseek(f, head.entryOffset, SEEK_SET);
 
@@ -337,7 +364,7 @@ int main(int argc, char *argv[])
 		fprintf(out, "count:  0x%04X\n", entries[i].count);
 		fprintf(out, "offset: 0x%08X\n", entries[i].offset);
 
-		r2 = process_entry(&entries[i]);
+		r2 = process_entry(&entries[i], meta_order, meta_count);
 		if (r2)
 		{
 			printf("failed: %d\n", r2);

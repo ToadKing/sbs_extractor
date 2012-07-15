@@ -98,17 +98,13 @@ typedef struct {
 }
 
 typedef struct {
-	u32 snr1;
+	u32 id;
 	u16 u1;
-	u32 sns1;
-	u16 u2;
 } sbr_metadata;
 
 #define DOSWAP_SBR_METADATA(x) {\
-	DOSWAP32((x).snr1);\
+	DOSWAP32((x).id);\
 	DOSWAP16((x).u1);\
-	DOSWAP32((x).sns1);\
-	DOSWAP16((x).u2);\
 }
 
 typedef struct {
@@ -147,12 +143,10 @@ typedef struct {
 
 typedef struct {
 	u32 offset;
-	u32 u1; // possibly size in other codec formats?
 } sbr_stream_offset;
 
 #define DOSWAP_SBR_STREAM_OFFSET(x) {\
 	DOSWAP32((x).offset);\
-	DOSWAP32((x).u1);\
 }
 
 typedef struct {
