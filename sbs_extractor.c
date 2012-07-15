@@ -41,24 +41,6 @@ int make_file(sbr_entry *entry, sbr_stream_metadata *meta, sbr_stream_offset *st
 	int last = 0;
 	int r = 0;
 
-	if (meta && meta->codec != 4)
-	{
-		printf("error: tool can currently only handle XAS audio (this is 0x%02X)\n", meta->codec);
-		r = 5;
-		goto error;
-	}
-	sprintf(fname, "%s/0x%08X.snu", name, entry->id);
-	printf("saving %s\n", fname);
-
-	sout = fopen(fname, "wb");
-
-	if (sout == NULL)
-	{
-		printf("failed to open file %s for writing\n", fname);
-		r = 6;
-		goto error;
-	}
-
 	if (fseek(sbs, stream_offset->offset, SEEK_SET))
 	{
 		printf("unexpected end of file (0x%08X)\n", stream_offset->offset);
@@ -93,10 +75,26 @@ int make_file(sbr_entry *entry, sbr_stream_metadata *meta, sbr_stream_offset *st
 	shead.u5 = 0;
 	shead.u6 = 0;
 
+	if (shead.codec != 4 && shead.codec != 25)
+	{
+		printf("error: tool can currently only handle XAS audio (this is 0x%02X)\n", meta->codec);
+		r = 5;
+		goto error;
+	}
+	sprintf(fname, "%s/0x%08X.snu", name, entry->id);
+	printf("saving %s\n", fname);
+
+	sout = fopen(fname, "wb");
+
+	if (sout == NULL)
+	{
+		printf("failed to open file %s for writing\n", fname);
+		r = 6;
+		goto error;
+	}
+
 	DOSWAP_SNU_HEADER(shead);
-
 	fwrite(&shead, sizeof(shead), 1, sout);
-
 	DOSWAP_SNU_HEADER(shead);
 
 	for(;;)

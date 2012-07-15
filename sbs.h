@@ -45,8 +45,8 @@ typedef unsigned long long u64;
 
 #ifndef _BIG_ENDIAN
 #define BSWAP16(x) ((u16)((((u16)(x))>>8)|(((u16)(x))<<8)))
-#define BSWAP32(x) ((u32)((BSWAP16(((u32)(x))&0x0000FFFFU)<<16)|(BSWAP16(((u32)(x))>>16))))
-#define BSWAP64(x) ((u64)((BSWAP32(((u64)(x))&0x00000000FFFFFFFFULL)<<32)|(BSWAP32(((u64)(x))>>32))))
+#define BSWAP32(x) ((u32)((BSWAP16((u32)(x))<<16)|(BSWAP16(((u32)(x))>>16))))
+#define BSWAP64(x) ((u64)((BSWAP32((u64)(x))<<32)|(BSWAP32(((u64)(x))>>32))))
 #else
 #define BSWAP16(x) (x)
 #define BSWAP32(x) (x)
