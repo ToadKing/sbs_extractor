@@ -33,29 +33,42 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 
+#ifdef _WIN32
 #include <Windows.h>
+#include <direct.h>
+#define mkdir(x, y) _mkdir(x)
+#else
+#include <sys/stat.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
-#include <direct.h>
+#include <string.h>
 
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
 typedef unsigned long long u64;
 
+int is_be = 0;
+
 #ifndef _BIG_ENDIAN
-#define BSWAP16(x) ((u16)((((u16)(x))>>8)|(((u16)(x))<<8)))
+#define BSWAP16(x) ((is_be)?(u16)((((u16)(x))>>8)|(((u16)(x))<<8)):(u16)(x))
+#define BSWAP16BE(x) ((u16)((((u16)(x))>>8)|(((u16)(x))<<8)))
+#else
+#define BSWAP16(x) ((is_be)?(u16)(x):(u16)((((u16)(x))>>8)|(((u16)(x))<<8)))
+#define BSWAP16BE(x) ((u16)(x))
+#endif
 #define BSWAP32(x) ((u32)((BSWAP16((u32)(x))<<16)|(BSWAP16(((u32)(x))>>16))))
 #define BSWAP64(x) ((u64)((BSWAP32((u64)(x))<<32)|(BSWAP32(((u64)(x))>>32))))
-#else
-#define BSWAP16(x) (x)
-#define BSWAP32(x) (x)
-#define BSWAP64(x) (x)
-#endif
+#define BSWAP32BE(x) ((u32)((BSWAP16BE((u32)(x))<<16)|(BSWAP16BE(((u32)(x))>>16))))
+#define BSWAP64BE(x) ((u64)((BSWAP32BE((u64)(x))<<32)|(BSWAP32BE(((u64)(x))>>32))))
 
 #define DOSWAP16(x) (x) = BSWAP16(*(u16*)&(x))
 #define DOSWAP32(x) (x) = BSWAP32(*(u32*)&(x))
 #define DOSWAP64(x) (x) = BSWAP64(*(u64*)&(x))
+#define DOSWAP16BE(x) (x) = BSWAP16BE(*(u16*)&(x))
+#define DOSWAP32BE(x) (x) = BSWAP32BE(*(u32*)&(x))
+#define DOSWAP64BE(x) (x) = BSWAP64BE(*(u64*)&(x))
 
 #define U32_TO_CHARS(x) (char) ((x) >> 24), (char) ((x) >> 16), (char) ((x) >> 8), (char) (x)
 
@@ -79,10 +92,11 @@ typedef struct {
 	u16 u3;
 } sbr_header;
 
-#define SBR_MAGIC 0x53424B52U
+#define SBR_MAGIC_BE 0x53424B52U
+#define SBR_MAGIC_LE 0x53426C65U
 
 #define DOSWAP_SBR_HEADER(x) {\
-	DOSWAP32((x).magic);\
+	/*DOSWAP32((x).magic);*/\
 	DOSWAP32((x).u1);\
 	DOSWAP32((x).b1);\
 	DOSWAP32((x).b2);\
@@ -103,7 +117,7 @@ typedef struct {
 } sbr_metadata;
 
 #define DOSWAP_SBR_METADATA(x) {\
-	DOSWAP32((x).id);\
+	DOSWAP32BE((x).id);\
 	DOSWAP16((x).u1);\
 }
 
