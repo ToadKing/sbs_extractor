@@ -304,25 +304,25 @@ int main(int argc, char *argv[])
 
 	fread(&head, sizeof(head), 1, f);
 
-   is_be = 1;
+	is_be = 1;
 	DOSWAP32BE(head.magic);
 
 	if (head.magic == SBR_MAGIC_BE)
-   {
-      is_be = 1;
-   }
-   else if (head.magic == SBR_MAGIC_LE)
-   {
-      is_be = 0;
-   }
-   else
+	{
+		is_be = 1;
+	}
+	else if (head.magic == SBR_MAGIC_LE)
+	{
+		is_be = 0;
+	}
+	else
 	{
 		printf("file unknown format\n");
 		printf("got 0x%08X\n", head.magic);
 		goto error;
 	}
 
-   DOSWAP_SBR_HEADER(head);
+	DOSWAP_SBR_HEADER(head);
 
 	fprintf(out, "HEADER:\n");
 	fprintf(out, "magic:       \"%c%c%c%c\"\n", U32_TO_CHARS(head.magic));
@@ -358,7 +358,7 @@ int main(int argc, char *argv[])
 			meta_order[meta_count++] = 1;
 		}
 		else if (meta.id == 0x534E5331 || // SNS1
-         meta.id == SBR_MAGIC_LE)
+			meta.id == SBR_MAGIC_LE)
 		{
 			meta_order[meta_count++] = 2;
 			break;

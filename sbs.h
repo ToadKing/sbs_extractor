@@ -51,17 +51,27 @@ typedef unsigned long long u64;
 
 int is_be = 0;
 
-#ifndef _BIG_ENDIAN
-#define BSWAP16(x) ((is_be)?(u16)((((u16)(x))>>8)|(((u16)(x))<<8)):(u16)(x))
-#define BSWAP16BE(x) ((u16)((((u16)(x))>>8)|(((u16)(x))<<8)))
-#else
-#define BSWAP16(x) ((is_be)?(u16)(x):(u16)((((u16)(x))>>8)|(((u16)(x))<<8)))
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#define BSWAP16(x) ((is_be)?(u16)(x):BSWAP16LE(x))
+#define BSWAP32(x) ((is_be)?(u32)(x):BSWAP32LE(x))
+#define BSWAP64(x) ((is_be)?(u64)(x):BSWAP64LE(x))
 #define BSWAP16BE(x) ((u16)(x))
-#endif
-#define BSWAP32(x) ((u32)((BSWAP16((u32)(x))<<16)|(BSWAP16(((u32)(x))>>16))))
-#define BSWAP64(x) ((u64)((BSWAP32((u64)(x))<<32)|(BSWAP32(((u64)(x))>>32))))
+#define BSWAP32BE(x) ((u32)(x))
+#define BSWAP64BE(x) ((u64)(x))
+#define BSWAP16LE(x) ((u16)((((u16)(x))>>8)|(((u16)(x))<<8)))
+#define BSWAP32LE(x) ((u32)((BSWAP16LE((u32)(x))<<16)|(BSWAP16LE(((u32)(x))>>16))))
+#define BSWAP64LE(x) ((u64)((BSWAP32LE((u64)(x))<<32)|(BSWAP32LE(((u64)(x))>>32))))
+#else
+#define BSWAP16(x) ((!is_be)?(u16)(x):BSWAP16BE(x))
+#define BSWAP32(x) ((!is_be)?(u32)(x):BSWAP32BE(x))
+#define BSWAP64(x) ((!is_be)?(u64)(x):BSWAP64BE(x))
+#define BSWAP16BE(x) ((u16)((((u16)(x))>>8)|(((u16)(x))<<8)))
 #define BSWAP32BE(x) ((u32)((BSWAP16BE((u32)(x))<<16)|(BSWAP16BE(((u32)(x))>>16))))
 #define BSWAP64BE(x) ((u64)((BSWAP32BE((u64)(x))<<32)|(BSWAP32BE(((u64)(x))>>32))))
+#define BSWAP16LE(x) ((u16)(x))
+#define BSWAP32LE(x) ((u32)(x))
+#define BSWAP64LE(x) ((u64)(x))
+#endif
 
 #define DOSWAP16(x) (x) = BSWAP16(*(u16*)&(x))
 #define DOSWAP32(x) (x) = BSWAP32(*(u32*)&(x))
@@ -69,6 +79,9 @@ int is_be = 0;
 #define DOSWAP16BE(x) (x) = BSWAP16BE(*(u16*)&(x))
 #define DOSWAP32BE(x) (x) = BSWAP32BE(*(u32*)&(x))
 #define DOSWAP64BE(x) (x) = BSWAP64BE(*(u64*)&(x))
+#define DOSWAP16LE(x) (x) = BSWAP16LE(*(u16*)&(x))
+#define DOSWAP32LE(x) (x) = BSWAP32LE(*(u32*)&(x))
+#define DOSWAP64LE(x) (x) = BSWAP64LE(*(u64*)&(x))
 
 #define U32_TO_CHARS(x) (char) ((x) >> 24), (char) ((x) >> 16), (char) ((x) >> 8), (char) (x)
 
@@ -95,7 +108,7 @@ typedef struct {
 #define SBR_MAGIC_BE 0x53424B52U
 #define SBR_MAGIC_LE 0x53426C65U
 
-#define DOSWAP_SBR_HEADER(x) {\
+#define DOSWAP_SBR_HEADER(x) do {\
 	/*DOSWAP32((x).magic);*/\
 	DOSWAP32((x).u1);\
 	DOSWAP32((x).b1);\
@@ -109,17 +122,17 @@ typedef struct {
 	DOSWAP32((x).metaOffset);\
 	DOSWAP32((x).b5);\
 	DOSWAP16((x).u3);\
-}
+} while(0)
 
 typedef struct {
 	u32 id;
 	u16 u1;
 } sbr_metadata;
 
-#define DOSWAP_SBR_METADATA(x) {\
+#define DOSWAP_SBR_METADATA(x) do {\
 	DOSWAP32BE((x).id);\
 	DOSWAP16((x).u1);\
-}
+} while(0)
 
 typedef struct {
 	u32 id;
@@ -127,21 +140,21 @@ typedef struct {
 	u32 offset;
 } sbr_entry;
 
-#define DOSWAP_SBR_ENTRY(x) {\
+#define DOSWAP_SBR_ENTRY(x) do {\
 	DOSWAP32((x).id);\
 	DOSWAP16((x).count);\
 	DOSWAP32((x).offset);\
-}
+} while(0)
 
 typedef struct {
 	u16 id; // 0 for stream metadata, 1 for stream offset (in sbs file)
 	u32 offset;
 } sbr_entry_metadata;
 
-#define DOSWAP_SBR_ENTRY_METADATA(x) {\
+#define DOSWAP_SBR_ENTRY_METADATA(x) do {\
 	DOSWAP16((x).id);\
 	DOSWAP32((x).offset);\
-}
+} while(0)
 
 typedef struct {
 	u8 codec;
@@ -150,18 +163,18 @@ typedef struct {
 	u32 samples; // high byte always 0x40
 } sbr_stream_metadata;
 
-#define DOSWAP_SBR_STREAM_METADATA(x) {\
+#define DOSWAP_SBR_STREAM_METADATA(x) do {\
 	DOSWAP16((x).freq);\
 	DOSWAP32((x).samples);\
-}
+} while(0)
 
 typedef struct {
 	u32 offset;
 } sbr_stream_offset;
 
-#define DOSWAP_SBR_STREAM_OFFSET(x) {\
+#define DOSWAP_SBR_STREAM_OFFSET(x) do {\
 	DOSWAP32((x).offset);\
-}
+} while(0)
 
 typedef struct {
 	u32 u1;
@@ -176,7 +189,7 @@ typedef struct {
 	u32 u6;
 } snu_header;
 
-#define DOSWAP_SNU_HEADER(x) {\
+#define DOSWAP_SNU_HEADER(x) do {\
 	DOSWAP32((x).u1);\
 	DOSWAP32((x).u2);\
 	DOSWAP32((x).magic);\
@@ -185,7 +198,7 @@ typedef struct {
 	DOSWAP32((x).samples);\
 	DOSWAP32((x).u5);\
 	DOSWAP32((x).u6);\
-}
+} while(0)
 
 #pragma pack(pop)
 
